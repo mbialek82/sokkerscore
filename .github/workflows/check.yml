@@ -1,0 +1,25 @@
+# On every push: rate the matches in regression/ and compare with the results stored next to them (made on the machine the
+# pipeline was validated on). Catches a pipeline file missing from the repository and any difference between that machine and
+# GitHub's Linux runners before the worker rates real matches with it.
+name: Check the pipeline
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -X utf8 -I backend/test/regression_check.py
