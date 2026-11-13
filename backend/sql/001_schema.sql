@@ -27,8 +27,18 @@ insert into public.ss_settings (key, value) values
   ('pool_min_minutes', '180'),   -- a player enters a position's comparison group with this many minutes there
   ('max_queued',       '300'),   -- ss_submit refuses new matches while this many wait
   ('max_attempts',     '3'),     -- a match that fails this often stays 'failed'
-  ('stale_minutes',    '30')     -- a match stuck in 'rating' this long is handed out again
+  ('stale_minutes',    '30'),    -- a match stuck in 'rating' this long is handed out again
+  ('github_repo',      'mbialek82/sokkerscore'),   -- where the worker lives: ss_start_worker starts <github_workflow> there on <github_ref>
+  ('github_workflow',  'rate.yml'),
+  ('github_ref',       'main')
 on conflict (key) do nothing;
+
+-- pg_net lets the database make an outgoing web call (to GitHub, to start the worker). A plain PostgreSQL does not have it.
+do $$ begin
+  create extension if not exists pg_net with schema extensions;
+exception when others then
+  raise notice 'pg_net is not available here: the database cannot start the worker itself';
+end $$;
 
 -- ---------------------------------------------------------------- matches (queue + rated list)
 create table if not exists public.ss_matches (
@@ -165,7 +175,61 @@ begin
     raise exception 'queue full, try again later';
   end if;
   insert into public.ss_matches (match_id) values (p_match_id) on conflict (match_id) do nothing;
+  perform public.ss_start_worker();   -- tell GitHub to rate it now (does nothing without a token; never stops the submission)
   return 'queued';
+end
+$$;
+
+-- ---------------------------------------------------------------- starting the worker from the database
+-- GitHub's own five-minute timer proved unreliable (it did not fire once in the repository's first 90 minutes), so a queued
+-- match starts the workflow directly: POST /repos/<repo>/actions/workflows/<workflow>/dispatches with a GitHub token kept in
+-- Supabase Vault under the name ss_github_token. The token is a fine-grained one, limited to that repository with
+-- "Actions: read and write". Several calls in a row are harmless: the workflow lets one run wait behind the running one.
+-- ss_set_github_token stores or replaces the token; only the database owner may call it (not even the worker's key).
+create or replace function public.ss_set_github_token(p_token text) returns void
+language plpgsql security definer set search_path = public, vault, pg_temp as $$
+declare
+  v_id uuid;
+begin
+  if p_token is null or length(trim(p_token)) < 20 then
+    raise exception 'that is not a token';
+  end if;
+  select id into v_id from vault.secrets where name = 'ss_github_token';
+  if v_id is null then
+    perform vault.create_secret(trim(p_token), 'ss_github_token', 'GitHub token that may start the SokkerScore rating workflow');
+  else
+    perform vault.update_secret(v_id, trim(p_token));
+  end if;
+end
+$$;
+
+-- returns pg_net's request id, or null when there is no token or the call could not be made
+create or replace function public.ss_start_worker() returns bigint
+language plpgsql security definer set search_path = public, vault, net, extensions, pg_temp as $$
+declare
+  v_token text;
+  v_repo  text;
+  v_wf    text;
+  v_ref   text;
+  v_id    bigint;
+begin
+  select decrypted_secret into v_token from vault.decrypted_secrets where name = 'ss_github_token';
+  if v_token is null then
+    return null;
+  end if;
+  select value into v_repo from public.ss_settings where key = 'github_repo';
+  select value into v_wf   from public.ss_settings where key = 'github_workflow';
+  select value into v_ref  from public.ss_settings where key = 'github_ref';
+  select net.http_post(
+           url     := 'https://api.github.com/repos/' || v_repo || '/actions/workflows/' || v_wf || '/dispatches',
+           body    := jsonb_build_object('ref', coalesce(v_ref, 'main')),
+           headers := jsonb_build_object('Authorization', 'Bearer ' || v_token, 'Accept', 'application/vnd.github+json',
+                                         'X-GitHub-Api-Version', '2022-11-28', 'User-Agent', 'sokkerscore-database',
+                                         'Content-Type', 'application/json'))
+    into v_id;
+  return v_id;
+exception when others then
+  return null;
 end
 $$;
 
@@ -317,6 +381,8 @@ revoke all on function public.ss_fail(bigint, text, boolean)             from pu
 revoke all on function public.ss_store_result(bigint, text, jsonb, jsonb) from public, anon, authenticated;
 revoke all on function public.ss_pool(text)                              from public, anon, authenticated;
 revoke all on function public.ss_player(bigint)                          from public, anon, authenticated;
+revoke all on function public.ss_start_worker()                          from public, anon, authenticated;
+revoke all on function public.ss_set_github_token(text)                  from public, anon, authenticated, service_role;
 
 grant execute on function public.ss_submit(bigint)  to anon, authenticated, service_role;
 grant execute on function public.ss_pool(text)      to anon, authenticated, service_role;
@@ -325,5 +391,6 @@ grant execute on function public.ss_jsonb_add(jsonb, jsonb)                  to 
 grant execute on function public.ss_claim(integer)                           to service_role;
 grant execute on function public.ss_fail(bigint, text, boolean)              to service_role;
 grant execute on function public.ss_store_result(bigint, text, jsonb, jsonb) to service_role;
+grant execute on function public.ss_start_worker()                           to service_role;
 
 commit;

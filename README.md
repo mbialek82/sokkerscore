@@ -6,9 +6,10 @@ Sokker's match report. This repository is the part that runs on a server: the co
 
 ## How it works
 1. The extension uploads a match's raw data (the viewer bundle and Sokker's match report) to a Supabase project and queues it.
-2. A GitHub Actions job (`.github/workflows/rate.yml`, every five minutes) runs `backend/worker/rate_queue.py`: it takes the
-   queued matches, rates each with `sokkerscore/live/rate_match_v2.py`, publishes the result as a JSON file and stores the
-   players' rows and totals in the database.
+2. Queueing a match makes the database start a GitHub Actions job (`.github/workflows/rate.yml`; a five-minute schedule is
+   the safety net). The job runs `backend/worker/rate_queue.py`: it takes the queued matches, rates each with
+   `sokkerscore/live/rate_match_v2.py`, publishes the result as a JSON file and stores the players' rows and totals in the
+   database. A match is usually rated within a minute of being opened for the first time.
 3. The extension reads the result and shows the tab; player profiles and comparison groups come from the same database.
 
 ## What is here
@@ -34,5 +35,10 @@ A match takes about half a minute.
 ## Setting up the worker
 Run `backend/sql/001_schema.sql` once in the Supabase SQL editor, then add two repository secrets (Settings → Secrets and
 variables → Actions): `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (the secret service key, never the public one).
+
+For the database to start the job itself, give it a fine-grained GitHub token that may do one thing, start workflows in
+this repository (repository access: only this repository; permission: Actions, read and write), by running
+`select ss_set_github_token('<token>')` as the database owner. The token is kept in Supabase Vault. Without it everything
+still works; matches then wait for the schedule.
 
 The rating formula is public: see the docstrings of `sokkerscore/poss/ratings_v*.py`.

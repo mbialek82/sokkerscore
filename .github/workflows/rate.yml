@@ -1,5 +1,7 @@
-# Rates the matches waiting in the SokkerScore database. Runs every five minutes (GitHub may start scheduled runs late)
-# and can be started by hand from the Actions tab. Needs two repository secrets: SUPABASE_URL and SUPABASE_SERVICE_KEY.
+# Rates the matches waiting in the SokkerScore database. Started by the database itself the moment a match is queued
+# (ss_start_worker in backend/sql/001_schema.sql calls GitHub's workflow_dispatch), by hand from the Actions tab, and every
+# five minutes as a safety net (GitHub may start scheduled runs late or not at all).
+# Needs two repository secrets: SUPABASE_URL and SUPABASE_SERVICE_KEY.
 name: Rate queued matches
 
 on:
