@@ -8,7 +8,7 @@ Sokker's match report. This repository is the part that runs on a server: the co
 1. The extension uploads a match's raw data (the viewer bundle and Sokker's match report) to a Supabase project and queues it.
 2. Queueing a match makes the database start a GitHub Actions job (`.github/workflows/rate.yml`; a five-minute schedule is
    the safety net). The job runs `backend/worker/rate_queue.py`: it takes the queued matches, rates each with
-   `sokkerscore/live/rate_match_v2.py`, publishes the result as a JSON file and stores the players' rows and totals in the
+   `sokkerscore/live/rate_match_v3.py`, publishes the result as a JSON file and stores the players' rows and totals in the
    database. A match is usually rated within a minute of being opened for the first time.
 3. The extension reads the result and shows the tab; player profiles and comparison groups come from the same database.
 
@@ -17,7 +17,7 @@ Sokker's match report. This repository is the part that runs on a server: the co
 sokkerscore/            the rating pipeline (Python, numpy only): bundle decoder, detectors, xG / xA models with their
                         training data, the rating formula. Only the files rating a match needs; file names carry version
                         numbers because every change to an analysis file is a new file.
-sokkerscore/live/rate_match_v2.py    rates one match:  bundle + report  ->  the match object the extension renders
+sokkerscore/live/rate_match_v3.py    rates one match:  bundle + report  ->  the match object the extension renders
 backend/sql/001_schema.sql           the database: tables, storage buckets, access rules, functions (Supabase / PostgreSQL)
 backend/worker/rate_queue.py         the worker
 backend/worker/result_payload.py     rated match -> what the database stores
@@ -28,7 +28,7 @@ regression/<match id>/               bundle, report and expected result of a few
 ## Rating a match yourself
 ```
 pip install -r requirements.txt
-python -X utf8 -I sokkerscore/live/rate_match_v2.py regression/43784593/bundle.txt regression/43784593/report.json out.json
+python -X utf8 -I sokkerscore/live/rate_match_v3.py regression/43784593/bundle.txt regression/43784593/report.json out.json
 ```
 A match takes about half a minute.
 

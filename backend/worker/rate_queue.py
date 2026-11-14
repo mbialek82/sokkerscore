@@ -2,7 +2,7 @@
 
 For each match handed out by ss_claim:
   1. download its raw files from the private bucket ss-raw (report.json, bundle.txt or bundle.txt.gz, lineup.json if there);
-  2. rate it with sokkerscore/live/rate_match_v2;
+  2. rate it with sokkerscore/live/rate_match_v3;
   3. check that bundle and report are the same match (same score; after a shootout the report carries the shootout score);
   4. write matches/<id>.json to the public bucket ss-results;
   5. store the match with ss_store_result (match row, player rows, comparison-group totals, in one transaction).
@@ -94,7 +94,7 @@ def main():
         print('SUPABASE_URL and SUPABASE_SERVICE_KEY must be set'); return 2
     sys.path.insert(0, os.path.join(PROJECT, 'sokkerscore', 'live')); sys.path.insert(0, HERE)
     import result_payload as RP
-    import rate_match_v2 as R                      # changes the working directory to sokkerscore/
+    import rate_match_v3 as R                      # changes the working directory to sokkerscore/
     t0 = time.time(); done = failed = 0
     while time.time() - t0 < MAX_MINUTES * 60:
         ids = rpc('ss_claim', dict(p_limit=BATCH)) or []
