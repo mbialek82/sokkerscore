@@ -373,6 +373,15 @@ language sql stable set search_path = public, pg_temp as $$
    where p.player_id = p_player_id
 $$;
 
+-- ---------------------------------------------------------------- extension: several players at once (the squad page)
+-- [ss_player(id), ...] for the ids the database knows, in id order; unknown ids are left out. At most 200 ids are looked at.
+create or replace function public.ss_squad(p_ids bigint[]) returns jsonb
+language sql stable set search_path = public, pg_temp as $$
+  select coalesce(jsonb_agg(public.ss_player(p.player_id) order by p.player_id), '[]'::jsonb)
+    from public.ss_players p
+   where p.player_id = any (p_ids[1:200])
+$$;
+
 -- ---------------------------------------------------------------- who may call what
 revoke all on function public.ss_jsonb_add(jsonb, jsonb)                 from public, anon, authenticated;
 revoke all on function public.ss_submit(bigint)                          from public, anon, authenticated;
@@ -381,12 +390,14 @@ revoke all on function public.ss_fail(bigint, text, boolean)             from pu
 revoke all on function public.ss_store_result(bigint, text, jsonb, jsonb) from public, anon, authenticated;
 revoke all on function public.ss_pool(text)                              from public, anon, authenticated;
 revoke all on function public.ss_player(bigint)                          from public, anon, authenticated;
+revoke all on function public.ss_squad(bigint[])                         from public, anon, authenticated;
 revoke all on function public.ss_start_worker()                          from public, anon, authenticated;
 revoke all on function public.ss_set_github_token(text)                  from public, anon, authenticated, service_role;
 
 grant execute on function public.ss_submit(bigint)  to anon, authenticated, service_role;
 grant execute on function public.ss_pool(text)      to anon, authenticated, service_role;
 grant execute on function public.ss_player(bigint)  to anon, authenticated, service_role;
+grant execute on function public.ss_squad(bigint[]) to anon, authenticated, service_role;
 grant execute on function public.ss_jsonb_add(jsonb, jsonb)                  to service_role;
 grant execute on function public.ss_claim(integer)                           to service_role;
 grant execute on function public.ss_fail(bigint, text, boolean)              to service_role;
