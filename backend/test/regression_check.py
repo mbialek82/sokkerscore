@@ -1,4 +1,4 @@
-"""regression_check.py — rates every match in regression/<match id>/ (bundle.txt + report.json) with sokkerscore/live/rate_match_v5 and
+"""regression_check.py — rates every match in regression/<match id>/ (bundle.txt + report.json) with sokkerscore/live/rate_match_v7 and
 compares the result with expected.json in the same folder, field by field. The expected files are written by
 backend/tools/export_repo.py on the machine the pipeline was validated on, so in the public repository this check shows whether
 GitHub's runner gives the same ratings (and whether any pipeline file is missing).
@@ -28,7 +28,7 @@ if __name__ == '__main__':
     write = '--write' in sys.argv
     if '--dir' in sys.argv: REG = os.path.abspath(sys.argv[sys.argv.index('--dir') + 1])
     sys.path.insert(0, os.path.join(REPO, 'sokkerscore', 'live'))
-    import rate_match_v5 as R                      # changes the working directory to sokkerscore/
+    import rate_match_v7 as R                      # changes the working directory to sokkerscore/
     bad = 0
     for mid in sorted(os.listdir(REG)):
         d = os.path.join(REG, mid)
