@@ -22,11 +22,12 @@ URL = os.environ.get('SUPABASE_URL', '').rstrip('/')
 KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
 BATCH = int(os.environ.get('SS_BATCH', '5'))
 MAX_MINUTES = float(os.environ.get('SS_MAX_MINUTES', '40'))
-# Kinds of match that are rated (competition.type in Sokker's report): league, promotion play-off, national cup, international
-# cup, national-team qualifiers, World Cup and national-team friendlies. Club friendlies, arcade and junior-league matches are
-# not (owner's decision, 13 Nov 2026). The extension has the same list (extension/src/config.js) and does not send the others;
-# this check is for anything uploaded some other way.
-RATED = {'league', 'qual', 'cup', 'international', 'wc_qual', 'wc_group', 'nt_friendly'}
+# Kinds of match that are NOT rated (competition.type in Sokker's report): club friendlies, arcade and junior-league matches
+# (owner's decision, 13 Nov 2026). Every other kind is rated (league, qual, cup, international, wc_qual, wc_group, wc_final,
+# nt_friendly, and any kind Sokker adds later). Until 23 Nov 2026 this was a list of the rated kinds, which missed the World Cup
+# finals (wc_final); the owner chose a skip list. The extension has the same list (extension/src/config.js) and does not send
+# these; this check is for anything uploaded some other way.
+SKIP = {'friendly', 'arcade', 'junior'}
 
 
 class Transient(Exception):
@@ -69,7 +70,7 @@ def rate_one(mid, R, RP):
     if int(report.get('id') or 0) != mid:
         raise ValueError(f'the report is for match {report.get("id")}')
     kind = (report.get('competition') or {}).get('type')
-    if kind not in RATED:
+    if not kind or kind in SKIP:
         raise ValueError(f'not a rated kind of match ({kind}); only official matches are rated')
     b = raw(f'{mid}/bundle.txt')
     if b is None:
